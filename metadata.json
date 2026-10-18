@@ -1,0 +1,6 @@
+{
+  "name": "DueTrack",
+  "description": "Smart assignment management app designed to prevent missed deadlines with urgency tracking, course tags, and progress checklists.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

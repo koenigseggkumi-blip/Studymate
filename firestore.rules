@@ -1,0 +1,102 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidAssignment(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+             data.courseName is string && data.courseName.size() >= 1 && data.courseName.size() <= 100 &&
+             data.courseColorHex is string && data.courseColorHex.size() <= 20 &&
+             data.dueTimestamp is timestamp &&
+             (data.priority in ['HIGH', 'MEDIUM', 'LOW']) &&
+             (data.status in ['NOT_STARTED', 'IN_PROGRESS', 'COMPLETED']) &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 5000)) &&
+             (!('estimatedMinutes' in data) || (data.estimatedMinutes is int && data.estimatedMinutes >= 0 && data.estimatedMinutes <= 100000)) &&
+             (!('subtasks' in data) || (data.subtasks is list && data.subtasks.size() <= 50));
+    }
+
+    function isValidCourse(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+             data.code is string && data.code.size() >= 1 && data.code.size() <= 50 &&
+             data.colorHex is string && data.colorHex.size() <= 20;
+    }
+
+    match /users/{userId} {
+      match /assignments/{assignmentId} {
+        allow get, list: if isSignedIn() && request.auth.uid == userId;
+
+        allow create: if isSignedIn() &&
+                         request.auth.uid == userId &&
+                         incoming().userId == userId &&
+                         isValidId(assignmentId) &&
+                         incoming().keys().hasAll(['userId', 'title', 'courseName', 'courseColorHex', 'dueTimestamp', 'priority', 'status', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'title', 'courseName', 'courseColorHex', 'dueTimestamp', 'priority', 'status', 'notes', 'estimatedMinutes', 'subtasks', 'createdAt', 'updatedAt']) &&
+                         incoming().createdAt is timestamp &&
+                         incoming().createdAt <= request.time &&
+                         incoming().updatedAt is timestamp &&
+                         incoming().updatedAt <= request.time &&
+                         isValidAssignment(incoming());
+
+        allow update: if isSignedIn() &&
+                         request.auth.uid == userId &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().updatedAt is timestamp &&
+                         incoming().updatedAt <= request.time &&
+                         isValidAssignment(incoming()) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['title', 'courseName', 'courseColorHex', 'dueTimestamp', 'priority', 'status', 'notes', 'estimatedMinutes', 'subtasks', 'updatedAt']);
+
+        allow delete: if isSignedIn() && request.auth.uid == userId;
+      }
+
+      match /courses/{courseId} {
+        allow get, list: if isSignedIn() && request.auth.uid == userId;
+
+        allow create: if isSignedIn() &&
+                         request.auth.uid == userId &&
+                         incoming().userId == userId &&
+                         isValidId(courseId) &&
+                         incoming().keys().hasAll(['userId', 'name', 'code', 'colorHex', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'name', 'code', 'colorHex', 'createdAt', 'updatedAt']) &&
+                         incoming().createdAt is timestamp &&
+                         incoming().createdAt <= request.time &&
+                         incoming().updatedAt is timestamp &&
+                         incoming().updatedAt <= request.time &&
+                         isValidCourse(incoming());
+
+        allow update: if isSignedIn() &&
+                         request.auth.uid == userId &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().updatedAt is timestamp &&
+                         incoming().updatedAt <= request.time &&
+                         isValidCourse(incoming()) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['name', 'code', 'colorHex', 'updatedAt']);
+
+        allow delete: if isSignedIn() && request.auth.uid == userId;
+      }
+    }
+  }
+}

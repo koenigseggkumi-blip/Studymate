@@ -1,0 +1,126 @@
+{
+  "entities": {
+    "Assignment": {
+      "title": "Assignment",
+      "description": "Student homework, project, or exam assignment with due dates and urgency tracking",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "ID of the user who owns the assignment"
+        },
+        "title": {
+          "type": "string",
+          "description": "Title of the assignment"
+        },
+        "courseName": {
+          "type": "string",
+          "description": "Name or code of the course"
+        },
+        "courseColorHex": {
+          "type": "string",
+          "description": "Color hex code for course badge"
+        },
+        "dueTimestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the assignment is due (Timestamp)"
+        },
+        "priority": {
+          "type": "string",
+          "enum": ["HIGH", "MEDIUM", "LOW"],
+          "description": "Urgency priority level"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["NOT_STARTED", "IN_PROGRESS", "COMPLETED"],
+          "description": "Current completion status"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Details, submission links, or study notes"
+        },
+        "estimatedMinutes": {
+          "type": "integer",
+          "description": "Estimated minutes to complete"
+        },
+        "subtasks": {
+          "type": "array",
+          "description": "Checklist subtasks to break down the assignment"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp. Clients must submit FieldValue.serverTimestamp()."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last update timestamp. Clients must submit FieldValue.serverTimestamp()."
+        }
+      },
+      "required": [
+        "userId",
+        "title",
+        "courseName",
+        "courseColorHex",
+        "dueTimestamp",
+        "priority",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Course": {
+      "title": "Course",
+      "description": "Academic course or subject",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Course title"
+        },
+        "code": {
+          "type": "string",
+          "description": "Course code (e.g., CS101, MATH200)"
+        },
+        "colorHex": {
+          "type": "string",
+          "description": "Hex color string for badge"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last update timestamp"
+        }
+      },
+      "required": [
+        "userId",
+        "name",
+        "code",
+        "colorHex",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/assignments/{assignmentId}": {
+      "schema": "Assignment",
+      "description": "User assignments and homework deliverables"
+    },
+    "/users/{userId}/courses/{courseId}": {
+      "schema": "Course",
+      "description": "User courses and subjects"
+    }
+  }
+}
