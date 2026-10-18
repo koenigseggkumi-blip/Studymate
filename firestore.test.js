@@ -101,3 +101,25 @@ test("Schema validation: rejects invalid priority", async () => {
     })
   );
 });
+
+test("Authenticated user: can read and write own habits", async () => {
+  const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
+  const now = new Date();
+  await assertSucceeds(
+    aliceDb.collection("users").doc(ALICE_UID).collection("habits").doc("habit_1").set({
+      userId: ALICE_UID,
+      title: "Solve WASSCE Pasco Questions",
+      category: "Exam Prep",
+      colorHex: "#F59E0B",
+      streakCount: 3,
+      bestStreak: 5,
+      completedDates: ["2026-10-18"],
+      createdAt: now,
+      updatedAt: now,
+    })
+  );
+
+  const bobDb = testEnv.authenticatedContext(BOB_UID).firestore();
+  await assertFails(bobDb.collection("users").doc(ALICE_UID).collection("habits").doc("habit_1").get());
+});
+

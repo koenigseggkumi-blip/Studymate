@@ -9,6 +9,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -54,16 +57,19 @@ internal fun FirebaseAuth.authStateFlow(): Flow<FirebaseUser?> = callbackFlow {
 
 @Composable
 fun AppNavigation(auth: FirebaseAuth = FirebaseAuth.getInstance()) {
+    var isGuestMode by remember { mutableStateOf(false) }
     val currentUser by auth.authStateFlow().collectAsStateWithLifecycle(initialValue = auth.currentUser)
     val user = currentUser
 
-    if (user == null) {
+    if (user == null && !isGuestMode) {
         AuthScreen(
-            onAuthSuccess = { /* authStateFlow will automatically update currentUser */ }
+            onAuthSuccess = { /* authStateFlow will automatically update currentUser */ },
+            onContinueOffline = { isGuestMode = true }
         )
     } else {
+        val effectiveUid = user?.uid ?: "offline_student_guest"
         val viewModel: AssignmentViewModel = viewModel(
-            key = user.uid,
+            key = effectiveUid,
             factory = viewModelFactory {
                 initializer {
                     val app = checkNotNull(this[APPLICATION_KEY]) {
@@ -71,14 +77,18 @@ fun AppNavigation(auth: FirebaseAuth = FirebaseAuth.getInstance()) {
                     }
                     val databaseId = app.getString(R.string.firestore_database_id)
                     val db = FirebaseFirestore.getInstance(databaseId)
-                    AssignmentViewModel(AssignmentRepository(db), user.uid)
+                    AssignmentViewModel(AssignmentRepository(db, app.applicationContext), effectiveUid)
                 }
             }
         )
         MainScreen(
             viewModel = viewModel,
             onSignOut = {
-                // auth.signOut() triggers authStateFlow -> currentUser becomes null
+                if (isGuestMode) {
+                    isGuestMode = false
+                } else {
+                    auth.signOut()
+                }
             }
         )
     }

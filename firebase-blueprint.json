@@ -111,6 +111,62 @@
         "createdAt",
         "updatedAt"
       ]
+    },
+    "Habit": {
+      "title": "Habit",
+      "description": "Daily study or exam prep habit with streak tracking",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID"
+        },
+        "title": {
+          "type": "string",
+          "description": "Habit title"
+        },
+        "category": {
+          "type": "string",
+          "description": "Category tag e.g. Exam Prep, Study, Focus"
+        },
+        "colorHex": {
+          "type": "string",
+          "description": "Hex color for streak badge"
+        },
+        "streakCount": {
+          "type": "integer",
+          "description": "Current consecutive streak days"
+        },
+        "bestStreak": {
+          "type": "integer",
+          "description": "All-time best streak"
+        },
+        "completedDates": {
+          "type": "array",
+          "description": "Array of ISO date strings (YYYY-MM-DD)"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last update timestamp"
+        }
+      },
+      "required": [
+        "userId",
+        "title",
+        "category",
+        "colorHex",
+        "streakCount",
+        "bestStreak",
+        "completedDates",
+        "createdAt",
+        "updatedAt"
+      ]
     }
   },
   "firestore": {
@@ -121,6 +177,10 @@
     "/users/{userId}/courses/{courseId}": {
       "schema": "Course",
       "description": "User courses and subjects"
+    },
+    "/users/{userId}/habits/{habitId}": {
+      "schema": "Habit",
+      "description": "Student daily habits and exam prep streaks"
     }
   }
 }

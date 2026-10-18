@@ -28,15 +28,20 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -55,6 +60,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -77,6 +83,7 @@ import com.example.data.model.Assignment
 import com.example.data.model.Course
 import com.example.ui.components.AssignmentCard
 import com.example.ui.components.AssignmentEditorDialog
+import com.example.ui.components.CelebrationOverlay
 import com.example.ui.components.CourseManagerDialog
 import com.example.ui.components.NewAssignmentInputComponent
 import com.example.ui.components.UrgencyHeaderBanner
@@ -103,6 +110,7 @@ fun MainScreen(
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val userMessage by viewModel.userMessage.collectAsStateWithLifecycle()
 
+    var selectedTab by remember { mutableIntStateOf(0) }
     var showEditorDialog by remember { mutableStateOf(false) }
     var showNewAssignmentSheet by remember { mutableStateOf(false) }
     var editingAssignment by remember { mutableStateOf<Assignment?>(null) }
@@ -145,9 +153,13 @@ fun MainScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             val currentUser = FirebaseAuth.getInstance().currentUser
-                            val email = currentUser?.email ?: "Synced"
+                            val subtitleText = if (currentUser?.email != null) {
+                                currentUser.email!!
+                            } else {
+                                "Offline Mode (Local Storage)"
+                            }
                             Text(
-                                text = email,
+                                text = subtitleText,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 11.sp
@@ -156,17 +168,19 @@ fun MainScreen(
                     }
                 },
                 actions = {
-                    IconButton(
-                        onClick = { showCourseManagerDialog = true },
-                        modifier = Modifier.testTag("manage_courses_button")
-                    ) {
-                        Icon(Icons.Default.School, contentDescription = "Manage Courses")
+                    if (selectedTab == 0) {
+                        IconButton(
+                            onClick = { showCourseManagerDialog = true },
+                            modifier = Modifier.testTag("manage_courses_button")
+                        ) {
+                            Icon(Icons.Default.School, contentDescription = "Manage Courses")
+                        }
                     }
                     IconButton(
                         onClick = { showSignOutConfirmation = true },
                         modifier = Modifier.testTag("sign_out_button")
                     ) {
-                        Icon(Icons.Default.Logout, contentDescription = "Sign Out")
+                        Icon(Icons.Default.Logout, contentDescription = "Sign Out / Exit")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -175,23 +189,65 @@ fun MainScreen(
             )
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = {
-                    showNewAssignmentSheet = true
-                },
-                icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text("New Assignment") },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier.testTag("add_assignment_fab")
-            )
+            if (selectedTab == 0) {
+                ExtendedFloatingActionButton(
+                    onClick = {
+                        showNewAssignmentSheet = true
+                    },
+                    icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                    text = { Text("New Assignment") },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.testTag("add_assignment_fab")
+                )
+            }
+        },
+        bottomBar = {
+            NavigationBar(
+                containerColor = MaterialTheme.colorScheme.surface,
+                tonalElevation = 6.dp
+            ) {
+                NavigationBarItem(
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 },
+                    icon = { Icon(Icons.Default.Assignment, contentDescription = "Assignments") },
+                    label = { Text("Tasks") },
+                    modifier = Modifier.testTag("nav_assignments")
+                )
+                NavigationBarItem(
+                    selected = selectedTab == 1,
+                    onClick = { selectedTab = 1 },
+                    icon = { Icon(Icons.Default.Timer, contentDescription = "Prep Timer") },
+                    label = { Text("Prep Timer") },
+                    modifier = Modifier.testTag("nav_prep_timer")
+                )
+                NavigationBarItem(
+                    selected = selectedTab == 2,
+                    onClick = { selectedTab = 2 },
+                    icon = { Icon(Icons.Default.LocalFireDepartment, contentDescription = "Habits & Pasco") },
+                    label = { Text("Habits") },
+                    modifier = Modifier.testTag("nav_habits")
+                )
+                NavigationBarItem(
+                    selected = selectedTab == 3,
+                    onClick = { selectedTab = 3 },
+                    icon = { Icon(Icons.Default.Info, contentDescription = "About") },
+                    label = { Text("About") },
+                    modifier = Modifier.testTag("nav_about")
+                )
+            }
         }
     ) { paddingValues ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
+            when (selectedTab) {
+                0 -> {
+                    Column(
+                        modifier = Modifier.fillMaxSize()
+                    ) {
             when (val state = assignmentsState) {
                 is UiState.Loading -> {
                     Box(
@@ -479,6 +535,25 @@ fun MainScreen(
                     }
                 }
             }
+        }
+    }
+    1 -> {
+                    PomodoroTimerScreen(viewModel = viewModel)
+                }
+                2 -> {
+                    HabitTrackerScreen(viewModel = viewModel)
+                }
+                3 -> {
+                    AboutScreen()
+                }
+            }
+
+            // Live celebration overlay for task completion
+            val celebrationMessage by viewModel.celebrationEvent.collectAsStateWithLifecycle()
+            CelebrationOverlay(
+                message = celebrationMessage,
+                onDismiss = { viewModel.dismissCelebration() }
+            )
         }
     }
 

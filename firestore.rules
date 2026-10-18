@@ -43,6 +43,16 @@ service cloud.firestore {
              data.colorHex is string && data.colorHex.size() <= 20;
     }
 
+    function isValidHabit(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+             data.category is string && data.category.size() >= 1 && data.category.size() <= 100 &&
+             data.colorHex is string && data.colorHex.size() <= 20 &&
+             data.streakCount is int && data.streakCount >= 0 &&
+             data.bestStreak is int && data.bestStreak >= 0 &&
+             data.completedDates is list && data.completedDates.size() <= 3650;
+    }
+
     match /users/{userId} {
       match /assignments/{assignmentId} {
         allow get, list: if isSignedIn() && request.auth.uid == userId;
@@ -94,6 +104,33 @@ service cloud.firestore {
                          incoming().updatedAt <= request.time &&
                          isValidCourse(incoming()) &&
                          incoming().diff(existing()).affectedKeys().hasOnly(['name', 'code', 'colorHex', 'updatedAt']);
+
+        allow delete: if isSignedIn() && request.auth.uid == userId;
+      }
+
+      match /habits/{habitId} {
+        allow get, list: if isSignedIn() && request.auth.uid == userId;
+
+        allow create: if isSignedIn() &&
+                         request.auth.uid == userId &&
+                         incoming().userId == userId &&
+                         isValidId(habitId) &&
+                         incoming().keys().hasAll(['userId', 'title', 'category', 'colorHex', 'streakCount', 'bestStreak', 'completedDates', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'title', 'category', 'colorHex', 'streakCount', 'bestStreak', 'completedDates', 'createdAt', 'updatedAt']) &&
+                         incoming().createdAt is timestamp &&
+                         incoming().createdAt <= request.time &&
+                         incoming().updatedAt is timestamp &&
+                         incoming().updatedAt <= request.time &&
+                         isValidHabit(incoming());
+
+        allow update: if isSignedIn() &&
+                         request.auth.uid == userId &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().updatedAt is timestamp &&
+                         incoming().updatedAt <= request.time &&
+                         isValidHabit(incoming()) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['title', 'category', 'colorHex', 'streakCount', 'bestStreak', 'completedDates', 'updatedAt']);
 
         allow delete: if isSignedIn() && request.auth.uid == userId;
       }

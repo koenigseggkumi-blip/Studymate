@@ -4,9 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.model.Assignment
 import com.example.data.model.Course
+import com.example.data.model.Habit
 import com.example.data.model.SubtaskItem
 import com.example.data.repository.AssignmentRepository
+import com.example.util.DateUtils
 import com.google.firebase.Timestamp
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -14,9 +18,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.util.Calendar
-import java.util.Date
 
 sealed interface UiState<out T> {
     data object Loading : UiState<Nothing>
@@ -36,6 +39,12 @@ enum class SortBy(val label: String) {
     DUE_DATE("Urgency / Due Date"),
     PRIORITY("Priority"),
     COURSE("Course")
+}
+
+enum class PomodoroMode(val title: String, val durationMinutes: Int) {
+    FOCUS("Focus Session", 25),
+    SHORT_BREAK("Short Break", 5),
+    LONG_BREAK("Long Break", 15)
 }
 
 class AssignmentViewModel(
@@ -62,6 +71,14 @@ class AssignmentViewModel(
             initialValue = emptyList()
         )
 
+    val habitsState: StateFlow<List<Habit>> = repository.observeHabits(currentUserId)
+        .catch { emit(emptyList()) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000L),
+            initialValue = emptyList()
+        )
+
     private val _selectedFilter = MutableStateFlow(FilterType.ALL)
     val selectedFilter: StateFlow<FilterType> = _selectedFilter.asStateFlow()
 
@@ -76,6 +93,74 @@ class AssignmentViewModel(
 
     private val _userMessage = MutableStateFlow<String?>(null)
     val userMessage: StateFlow<String?> = _userMessage.asStateFlow()
+
+    // Celebration event for live completion animation
+    private val _celebrationEvent = MutableStateFlow<String?>(null)
+    val celebrationEvent: StateFlow<String?> = _celebrationEvent.asStateFlow()
+
+    fun dismissCelebration() {
+        _celebrationEvent.value = null
+    }
+
+    // Pomodoro Timer State
+    private val _pomodoroMode = MutableStateFlow(PomodoroMode.FOCUS)
+    val pomodoroMode: StateFlow<PomodoroMode> = _pomodoroMode.asStateFlow()
+
+    private val _timeLeftSeconds = MutableStateFlow(25 * 60)
+    val timeLeftSeconds: StateFlow<Int> = _timeLeftSeconds.asStateFlow()
+
+    private val _isTimerRunning = MutableStateFlow(false)
+    val isTimerRunning: StateFlow<Boolean> = _isTimerRunning.asStateFlow()
+
+    private val _completedSessionsCount = MutableStateFlow(0)
+    val completedSessionsCount: StateFlow<Int> = _completedSessionsCount.asStateFlow()
+
+    private val _linkedAssignment = MutableStateFlow<Assignment?>(null)
+    val linkedAssignment: StateFlow<Assignment?> = _linkedAssignment.asStateFlow()
+
+    private var timerJob: Job? = null
+
+    fun selectLinkedAssignment(assignment: Assignment?) {
+        _linkedAssignment.value = assignment
+    }
+
+    fun setPomodoroMode(mode: PomodoroMode) {
+        pauseTimer()
+        _pomodoroMode.value = mode
+        _timeLeftSeconds.value = mode.durationMinutes * 60
+    }
+
+    fun startTimer() {
+        if (_isTimerRunning.value) return
+        _isTimerRunning.value = true
+        timerJob = viewModelScope.launch {
+            while (isActive && _isTimerRunning.value && _timeLeftSeconds.value > 0) {
+                delay(1000L)
+                _timeLeftSeconds.value -= 1
+                if (_timeLeftSeconds.value <= 0) {
+                    _isTimerRunning.value = false
+                    if (_pomodoroMode.value == PomodoroMode.FOCUS) {
+                        _completedSessionsCount.value += 1
+                        _celebrationEvent.value = "🎯 Pomodoro completed! Take a well-earned break."
+                    } else {
+                        _userMessage.value = "Break finished! Ready to focus again?"
+                    }
+                    break
+                }
+            }
+        }
+    }
+
+    fun pauseTimer() {
+        _isTimerRunning.value = false
+        timerJob?.cancel()
+        timerJob = null
+    }
+
+    fun resetTimer() {
+        pauseTimer()
+        _timeLeftSeconds.value = _pomodoroMode.value.durationMinutes * 60
+    }
 
     fun clearUserMessage() {
         _userMessage.value = null
@@ -145,13 +230,15 @@ class AssignmentViewModel(
     }
 
     fun toggleAssignmentCompleted(assignment: Assignment) {
-        val newStatus = if (assignment.status == "COMPLETED") "IN_PROGRESS" else "COMPLETED"
+        val willComplete = assignment.status != "COMPLETED"
+        val newStatus = if (willComplete) "COMPLETED" else "IN_PROGRESS"
         val updated = assignment.copy(status = newStatus)
         viewModelScope.launch {
             val result = repository.updateAssignment(currentUserId, updated)
             if (result.isSuccess) {
-                if (newStatus == "COMPLETED") {
-                    _userMessage.value = "🎉 Great job completing '${assignment.title}'!"
+                if (willComplete) {
+                    // Trigger live celebration animation
+                    _celebrationEvent.value = "🎉 '${assignment.title}' Completed!"
                 }
             } else {
                 _userMessage.value = result.exceptionOrNull()?.message ?: "Failed to update status"
@@ -173,6 +260,9 @@ class AssignmentViewModel(
         val updated = assignment.copy(subtasks = updatedSubtasks, status = newStatus)
         viewModelScope.launch {
             repository.updateAssignment(currentUserId, updated)
+            if (allDone && assignment.status != "COMPLETED") {
+                _celebrationEvent.value = "🎉 All steps done for '${assignment.title}'!"
+            }
         }
     }
 
@@ -221,12 +311,87 @@ class AssignmentViewModel(
         if (currentCourses.isNotEmpty()) return
         viewModelScope.launch {
             val starters = listOf(
-                Course(userId = currentUserId, name = "Computer Science", code = "CS 101", colorHex = "#4F46E5"),
-                Course(userId = currentUserId, name = "Mathematics", code = "MATH 220", colorHex = "#0EA5E9"),
-                Course(userId = currentUserId, name = "Literature & History", code = "LIT 105", colorHex = "#F59E0B")
+                Course(userId = currentUserId, name = "General Science / Maths", code = "SCI 101", colorHex = "#4F46E5"),
+                Course(userId = currentUserId, name = "English & Literature", code = "ENG 201", colorHex = "#0EA5E9"),
+                Course(userId = currentUserId, name = "WASSCE Past Questions", code = "PASCO", colorHex = "#F59E0B")
             )
             for (c in starters) {
                 repository.createCourse(currentUserId, c)
+            }
+        }
+    }
+
+    // Habit Tracker Actions
+    fun createHabit(title: String, category: String, colorHex: String) {
+        if (title.isBlank()) {
+            _userMessage.value = "Habit title cannot be empty"
+            return
+        }
+        viewModelScope.launch {
+            val habit = Habit(
+                userId = currentUserId,
+                title = title.trim(),
+                category = category.trim().ifBlank { "Study" },
+                colorHex = colorHex,
+                streakCount = 0L,
+                bestStreak = 0L,
+                completedDates = emptyList()
+            )
+            val result = repository.createHabit(currentUserId, habit)
+            if (result.isSuccess) {
+                _userMessage.value = "Habit created: ${habit.title}"
+            } else {
+                _userMessage.value = result.exceptionOrNull()?.message ?: "Failed to create habit"
+            }
+        }
+    }
+
+    fun toggleHabit(habit: Habit) {
+        val todayStr = DateUtils.getTodayIsoString()
+        val willComplete = !habit.completedDates.contains(todayStr)
+        viewModelScope.launch {
+            val result = repository.toggleHabitForDate(currentUserId, habit, todayStr)
+            if (result.isSuccess && willComplete) {
+                val newStreak = habit.streakCount + 1
+                _celebrationEvent.value = "🔥 $newStreak Day Streak! Kept '${habit.title}' alive!"
+            }
+        }
+    }
+
+    fun deleteHabit(habitId: String) {
+        viewModelScope.launch {
+            val result = repository.deleteHabit(currentUserId, habitId)
+            if (result.isSuccess) {
+                _userMessage.value = "Habit deleted"
+            }
+        }
+    }
+
+    fun seedDefaultHabitsIfEmpty(currentHabits: List<Habit>) {
+        if (currentHabits.isNotEmpty()) return
+        viewModelScope.launch {
+            val defaults = listOf(
+                Habit(
+                    userId = currentUserId,
+                    title = "Solve 5 WASSCE Pasco Questions",
+                    category = "Exam Prep",
+                    colorHex = "#F59E0B"
+                ),
+                Habit(
+                    userId = currentUserId,
+                    title = "Review Core Notes & Flashcards",
+                    category = "Study Habit",
+                    colorHex = "#4F46E5"
+                ),
+                Habit(
+                    userId = currentUserId,
+                    title = "Complete 1 Focused Pomodoro",
+                    category = "Discipline",
+                    colorHex = "#10B981"
+                )
+            )
+            for (h in defaults) {
+                repository.createHabit(currentUserId, h)
             }
         }
     }

@@ -1,8 +1,12 @@
 package com.example.ui.components
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -185,12 +189,22 @@ fun AssignmentCard(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                val checkScale by animateFloatAsState(
+                    targetValue = if (isCompleted) 1.15f else 1f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessLow
+                    ),
+                    label = "checkScale"
+                )
+
                 // Circular completion button
                 Surface(
                     shape = CircleShape,
                     color = if (isCompleted) Color(0xFF10B981) else Color.Transparent,
                     modifier = Modifier
                         .size(32.dp)
+                        .graphicsLayer(scaleX = checkScale, scaleY = checkScale)
                         .border(
                             width = 2.dp,
                             color = if (isCompleted) Color(0xFF10B981) else MaterialTheme.colorScheme.outline,
